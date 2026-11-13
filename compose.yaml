@@ -1,0 +1,18 @@
+services:
+  db:
+    image: postgres:18.6
+    environment:
+      POSTGRES_DB: okno
+      POSTGRES_USER: okno
+      POSTGRES_PASSWORD: okno_local
+    ports:
+      - "127.0.0.1:${OKNO_DB_PORT:-55436}:5432"
+    volumes:
+      - db:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U okno -d okno"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+volumes:
+  db:

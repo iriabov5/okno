@@ -1,0 +1,45 @@
+name: Проверки
+
+on: [push, pull_request]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    env:
+      DATABASE_URL: postgresql://okno:okno_local@127.0.0.1:55436/okno
+      TEST_DATABASE_URL: postgresql://okno:okno_local@127.0.0.1:55436/okno
+      DEMO_MODE: 'true'
+      SIGNUP_ENABLED: 'true'
+      VITE_DEMO_MODE: 'true'
+      E2E_BASE_URL: http://127.0.0.1:5186
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm test
+      - run: docker compose up -d --wait db
+      - run: npm run test:coverage
+      - run: npm run db:migrate -w backend && npm run db:seed -w backend && npm run demo:conflict -w backend
+      - run: npx playwright install --with-deps chromium
+      - name: Запустить приложение и Playwright
+        run: |
+          npm run start -w backend > /tmp/okno-api.log 2>&1 &
+          npm run dev -w frontend -- --strictPort > /tmp/okno-ui.log 2>&1 &
+          curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:3100/api.json > /dev/null
+          curl --fail --retry 20 --retry-connrefused --retry-delay 1 http://127.0.0.1:5186/ > /dev/null
+          E2E_COVERAGE=true npm run test:e2e
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: okno-test-results
+          path: |
+            frontend/test-results
+            /tmp/okno-api.log
+            /tmp/okno-ui.log
